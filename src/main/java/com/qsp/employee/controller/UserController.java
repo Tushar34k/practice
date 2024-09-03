@@ -13,8 +13,12 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.qsp.employee.dto.UserDto;
 import com.qsp.employee.model.User;
+import com.qsp.employee.repo.UserRepository;
 import com.qsp.employee.service.UserService;
+
+import jakarta.validation.Valid;
 
 @RestController
 @RequestMapping("/api/user")
@@ -22,17 +26,38 @@ public class UserController {
 
 	@Autowired
 	private UserService userService;
+//
+//	@GetMapping("/{id}")
+//	public List<User> getAllUser(@RequestParam long id) {
+//		return userService.getAllUsers(id);
+//	}
 
-	@GetMapping("/{id}")
-	public List<User> getAllUser(@RequestParam long id) {
-		return userService.getAllUsers(id);
+	@PostMapping("/register")
+	public User registerUser(@RequestBody User user) {
+		return userService.registrtUser(user);
+	}
+
+	@PostMapping("/logins")
+	public String login(@RequestBody UserDto userDto) {
+		return userService.login(userDto);
 	}
 
 	@PostMapping("/create/{requesterId}")
-	public ResponseEntity<User> createdUsers(@RequestBody User user, @PathVariable Long requesterId) {
-	    User createdUser = userService.createUser(user, requesterId);
-	    return new ResponseEntity<>(createdUser, HttpStatus.CREATED);
+	public ResponseEntity<User> createUser(@Valid @RequestBody User user, @PathVariable Long requesterId) {
+		User createdUser = userService.createUser(user, requesterId);
+		return new ResponseEntity<>(createdUser, HttpStatus.CREATED);
 	}
 
+	@GetMapping("/allUser/{id}")
+	public ResponseEntity<List<User>> getAllUser(@PathVariable Long id) {
+		List<User> usresList = userService.getAllUsers(id);
+		return new ResponseEntity<List<User>>(usresList, HttpStatus.OK);
+	}
+
+	@GetMapping("/{id}")
+	public ResponseEntity<User> getUserById(@PathVariable Long id) {
+		User user = userService.getUserById(id);
+		return new ResponseEntity<User>(user, HttpStatus.OK);
+	}
 
 }

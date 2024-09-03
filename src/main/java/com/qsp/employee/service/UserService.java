@@ -1,14 +1,24 @@
 package com.qsp.employee.service;
 
+import java.security.PublicKey;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 
 import com.qsp.employee.exception.UnauthorizedAccessException;
+import com.qsp.employee.model.Role;
 import com.qsp.employee.model.User;
 import com.qsp.employee.repo.RoleRepository;
 import com.qsp.employee.repo.UserRepository;
+import com.qsp.employee.dto.UserDto;
+import com.qsp.employee.enums.RoleType;
 
 @Service
 public class UserService {
@@ -19,71 +29,134 @@ public class UserService {
 	@Autowired
 	private RoleRepository roleRepository;
 
-	public List<User> getAllUsers(Long requesterId) {
-		User userRequester = userRepository.findById(requesterId)
-				.orElseThrow(() -> new RuntimeException("user not found!!"));
+	@Autowired
+	private AuthenticationManager authenticationManager;
 
-		if (userRequester.getRole().getName().equals("ADMIN") || userRequester.getRole().getName().equals("HR")) {
-			return userRepository.findAll();
-		} else {
+//	public User createUser(User user, Long requesterId) {
+//
+//		Optional<User> existingUser = userRepository.findByEmail(user.getEmail());
+//
+//		if (existingUser.isEmpty()) {
+//			throw new RuntimeException("user is Already present!!");
+//		}
+//
+//		if (userRepository.count() == 0) {
+//			System.out.println("No users found. Seeding first user with ADMIN role.");
+//			Role adminRole = roleRepository.findByName(RoleType.ADMIN).orElseThrow(() -> new RuntimeException(
+//					"ADMIN role not found. Please ensure roles are seeded in the database."));
+//			user.setRole(adminRole);
+//			return userRepository.save(user);
+//		} else {
+//			System.out.println("Requester ID: " + requesterId);
+//			User requester = userRepository.findById(requesterId)
+//					.orElseThrow(() -> new RuntimeException("Requester not found"));
+//
+//			if (requester.getRole().getName() == RoleType.ADMIN) {
+//				System.out.println("Requester is ADMIN. Proceeding to create user.");
+//				Role userRole = roleRepository.findByName(user.getRole().getName())
+//						.orElseThrow(() -> new RuntimeException("Role not found"));
+//				user.setRole(userRole);
+//				return userRepository.save(user);
+//			} else {
+//				throw new UnauthorizedAccessException("Only admins can create new users.");
+//			}
+//		}
+//	}
 
-			throw new UnauthorizedAccessException("You do not have permistion to see all usres");
+//	here is user registration
 
-		}
-
+	public User registrtUser(User user) {
+		return userRepository.save(user);
 	}
+	
 
-	public User getUserById(Long id, Long requesterId) {
-		User userRequester = userRepository.findById(requesterId)
-				.orElseThrow(() -> new RuntimeException("user not found"));
-		if (userRequester.getRole().getName().equals("ADMIN") || userRequester.getRole().getName().equals("HR")
-				|| userRequester.getId().equals(id)) {
-			return userRepository.findById(id).orElseThrow(() -> new RuntimeException("not found id"));
+//	here try to verify the user
+	public String login(UserDto user) {
+		Authentication authentication = authenticationManager
+				.authenticate(new UsernamePasswordAuthenticationToken(user.getEmail(), user.getPassword()));
 
+		if (authentication.isAuthenticated()) {
+			return "success";
 		} else {
-			throw new UnauthorizedAccessException("Access denied");
+			return "fail";
 		}
 
 	}
 
 	public User createUser(User user, Long requesterId) {
-	
-		User requester = userRepository.findById(requesterId).get();
+		// Check if a user with the same email already exists
+		Optional<User> existingUser = userRepository.findByEmail(user.getEmail());
+		if (existingUser.isPresent()) {
+			throw new RuntimeException("A user with this email already exists.");
+		}
 
-	
-		if (requester.getRole().getName().equals("ADMIN")) {
-		
+		// If no users exist in the database, create the first user with ADMIN role
+		if (userRepository.count() == 0) {
+			System.out.println("No users found. Seeding first user with ADMIN role.");
+			Role adminRole = roleRepository.findByName(RoleType.ADMIN).orElseThrow(() -> new RuntimeException(
+					"ADMIN role not found. Please ensure roles are seeded in the database."));
+			user.setRole(adminRole);
 			return userRepository.save(user);
 		} else {
-		
-			throw new UnauthorizedAccessException("Access denied: Only admins can create users.");
+			System.out.println("Requester ID: " + requesterId);
+			User requester = userRepository.findById(requesterId)
+					.orElseThrow(() -> new RuntimeException("Requester not found"));
+
+			// Check if the requester is an ADMIN
+			if (requester.getRole().getName() == RoleType.ADMIN || requester.getRole().getName() == RoleType.HR) {
+				System.out.println("Attempting to fetch role: " + user.getRole().getName());
+				Role userRole = roleRepository.findByName(user.getRole().getName())
+						.orElseThrow(() -> new RuntimeException("Role not found: " + user.getRole().getName()));
+				user.setRole(userRole);
+				return userRepository.save(user);
+			} else {
+				throw new UnauthorizedAccessException("Only admins and Hr can create new users.");
+			}
 		}
 	}
 
 	public User updateUser(Long id, User user, Long requesterId) {
+		User requester = userRepository.findById(requesterId)
+				.orElseThrow(() -> new RuntimeException("Requester not found"));
 
-		User userRequester = userRepository.findById(requesterId).orElseThrow();
+		if (requester.getRole().getName() == RoleType.ADMIN) {
+			User existingUser = userRepository.findById(id).orElseThrow(() -> new RuntimeException("User not found"));
 
-		if (userRequester.getRole().getName().equals("ADMIN") || userRequester.equals(id)) {
-			User existingUser = userRepository.findById(id).orElseThrow();
 			existingUser.setName(user.getName());
 			existingUser.setEmail(user.getEmail());
-			existingUser.setRole(user.getRole());
-			existingUser.setDepartment(user.getDepartment());
+
+			Role userRole = roleRepository.findByName(user.getRole().getName())
+					.orElseThrow(() -> new RuntimeException("Role not found"));
+			existingUser.setRole(userRole);
 
 			return userRepository.save(existingUser);
 		} else {
-			throw new UnauthorizedAccessException("Access denied");
+			throw new UnauthorizedAccessException("Only admins can update users.");
 		}
-
 	}
 
-	public void deleteUser(Long id, Long requesterId) {
-		User userRequester = userRepository.findById(requesterId).orElseThrow();
+	public List<User> getAllUsers(Long requesterId) {
+		User requester = userRepository.findById(requesterId)
+				.orElseThrow(() -> new RuntimeException("Requester not found"));
 
-		if (userRequester.getRole().getName().equals("ADMIN")) {
-			User user = userRepository.findById(id).orElseThrow();
-			userRepository.delete(user);
+		if (requester.getRole().getName() == RoleType.ADMIN || requester.getRole().getName() == RoleType.HR) {
+			return userRepository.findAll();
+		} else {
+			throw new UnauthorizedAccessException("Only admins or HR can view all users");
+		}
+//		return Collections.emptyList();
+	}
+
+	public User getUserById(Long id) {
+		User requester = userRepository.findById(id).orElseThrow(() -> new RuntimeException("Requester not found"));
+
+		if (requester.getRole().getName() == RoleType.ADMIN || requester.getRole().getName() == RoleType.HR
+				|| requester.getId() == id) {
+
+			return userRepository.findById(id).get();
+
+		} else {
+			throw new RuntimeException("usre not found");
 		}
 
 	}
